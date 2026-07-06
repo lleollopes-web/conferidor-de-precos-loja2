@@ -520,6 +520,7 @@
     botao.textContent = 'Parar câmera';
     botao.classList.add('parar');
     escaneando = true;
+    etiqueta.classList.remove('visivel', 'nao-encontrado', 'tem-desconto');
 
     try {
       await leitor.start(
