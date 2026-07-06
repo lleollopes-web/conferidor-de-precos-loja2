@@ -263,8 +263,30 @@
     font-family: var(--display);
     font-size: 21px;
     font-weight: 600;
-    margin: 0 0 18px;
+    margin: 0 0 10px;
     line-height: 1.3;
+  }
+  .linha-desconto {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 22px;
+    margin-bottom: 8px;
+  }
+  .preco-original {
+    font-family: var(--mono);
+    font-size: 15px;
+    color: #ADA99C;
+    text-decoration: line-through;
+  }
+  .badge-desconto {
+    font-family: var(--texto);
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--laser);
+    padding: 3px 8px;
+    border-radius: 20px;
   }
   .etiqueta-preco .linha-preco {
     display: flex;
@@ -344,6 +366,10 @@
   <div class="etiqueta-preco" id="etiqueta">
     <p class="rotulo" id="etiqueta-rotulo">Produto</p>
     <p class="nome-produto" id="etiqueta-nome">—</p>
+    <div class="linha-desconto" id="linha-desconto" style="display:none;">
+      <span class="preco-original" id="etiqueta-preco-original"></span>
+      <span class="badge-desconto" id="etiqueta-desconto"></span>
+    </div>
     <div class="linha-preco">
       <span class="preco" id="etiqueta-preco">—</span>
       <span class="codigo" id="etiqueta-codigo"></span>
@@ -369,6 +395,9 @@
   const etiqueta = document.getElementById('etiqueta');
   const elRotulo = document.getElementById('etiqueta-rotulo');
   const elNome = document.getElementById('etiqueta-nome');
+  const linhaDesconto = document.getElementById('linha-desconto');
+  const elPrecoOriginal = document.getElementById('etiqueta-preco-original');
+  const elDesconto = document.getElementById('etiqueta-desconto');
   const elPreco = document.getElementById('etiqueta-preco');
   const elCodigo = document.getElementById('etiqueta-codigo');
   const botoesLoja = document.querySelectorAll('.botao-loja');
@@ -385,6 +414,16 @@
       return parseFloat(limpo);
     }
     return NaN;
+  }
+
+  function parseNumeroDesconto(valor) {
+    if (typeof valor === 'number') return valor;
+    if (typeof valor === 'string') {
+      const limpo = valor.replace(/[^\d,.-]/g, '').replace(',', '.');
+      const numero = parseFloat(limpo);
+      return isNaN(numero) ? 0 : numero;
+    }
+    return 0;
   }
 
   async function carregarCatalogo(loja) {
@@ -413,14 +452,21 @@
       let validos = 0;
 
       linhas.slice(1).forEach((linha) => { // pula a linha 1 (cabecalho)
-        const codigo = linha[0];           // Coluna A
-        const descricao = linha[1];        // Coluna B
-        const tamanho = linha[4];          // Coluna E
-        const preco = parseNumeroPreco(linha[5]); // Coluna F
+        const codigo = linha[0];                    // Coluna A
+        const descricao = linha[1];                 // Coluna B
+        const tamanho = linha[4];                    // Coluna E
+        const precoOriginal = parseNumeroPreco(linha[5]);  // Coluna F
+        const desconto = parseNumeroDesconto(linha[6]);    // Coluna G
+        const precoFinal = parseNumeroPreco(linha[7]);      // Coluna H
 
-        if (codigo && descricao && !isNaN(preco)) {
+        if (codigo && descricao && !isNaN(precoFinal)) {
           const nome = tamanho ? `${String(descricao).trim()} — Tam. ${String(tamanho).trim()}` : String(descricao).trim();
-          catalogo[String(codigo).trim()] = { nome, preco };
+          catalogo[String(codigo).trim()] = {
+            nome,
+            precoOriginal: isNaN(precoOriginal) ? precoFinal : precoOriginal,
+            desconto,
+            precoFinal,
+          };
           validos++;
         }
       });
@@ -525,10 +571,20 @@
     if (produto) {
       elRotulo.textContent = `Produto encontrado — ${nomeLoja(lojaAtual)}`;
       elNome.textContent = produto.nome;
-      elPreco.textContent = produto.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       elCodigo.textContent = codigo;
+
+      const temDesconto = produto.desconto > 0 && produto.precoOriginal > produto.precoFinal;
+      if (temDesconto) {
+        linhaDesconto.style.display = 'flex';
+        elPrecoOriginal.textContent = produto.precoOriginal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        elDesconto.textContent = `-${produto.desconto.toLocaleString('pt-BR')}%`;
+      } else {
+        linhaDesconto.style.display = 'none';
+      }
+      elPreco.textContent = produto.precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     } else {
       etiqueta.classList.add('nao-encontrado');
+      linhaDesconto.style.display = 'none';
       elRotulo.textContent = 'Não cadastrado';
       elNome.textContent = `Este código não foi encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
       elPreco.textContent = '';
