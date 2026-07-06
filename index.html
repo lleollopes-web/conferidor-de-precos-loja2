@@ -543,8 +543,16 @@
       await leitor.start(
         { facingMode: "environment" },
         {
-          fps: 10,
-          qrbox: undefined,
+          fps: 15,
+          // Restringe a area de leitura à mesma caixa mostrada na tela (a moldura).
+          // Processar uma area menor da imagem deixa a decodificacao mais rapida
+          // e mais precisa, o que ajuda bastante no Safari/iPhone.
+          qrbox: (larguraVisor, alturaVisor) => {
+            const tamanho = Math.floor(Math.min(larguraVisor, alturaVisor) * 0.75);
+            return { width: tamanho, height: Math.floor(tamanho * 0.55) };
+          },
+          aspectRatio: 1.0,
+          disableFlip: false,
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
@@ -553,13 +561,16 @@
             Html5QrcodeSupportedFormats.CODE_128,
             Html5QrcodeSupportedFormats.CODE_39,
           ],
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
         },
         (codigoLido) => onCodigoLido(codigoLido),
         () => { /* ignora frames sem leitura */ }
       );
     } catch (err) {
       pararLeitura();
-      alert('Não foi possível acessar a câmera. Verifique se você deu permissão de câmera para o site.');
+      alert('Não foi possível acessar a câmera. Verifique se você deu permissão de câmera para o site.\n\nDetalhe técnico: ' + (err && err.message ? err.message : err));
       console.error(err);
     }
   }
