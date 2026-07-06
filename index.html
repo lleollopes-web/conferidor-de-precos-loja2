@@ -256,12 +256,13 @@
     color: #9A968A;
     margin: 0 0 8px;
   }
-  .etiqueta-preco .nome-produto {
+  .etiqueta-preco .codigo-produto {
     font-family: var(--display);
-    font-size: 21px;
-    font-weight: 600;
-    margin: 0 0 10px;
-    line-height: 1.3;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 14px;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
   }
   .badge-saldo {
     display: none;
@@ -276,7 +277,15 @@
     margin-bottom: 8px;
   }
   #etiqueta.tem-desconto .badge-saldo { display: inline-block; }
-  #etiqueta.tem-desconto .nome-produto { color: var(--laser); }
+  #etiqueta.tem-desconto .codigo-produto { color: var(--laser); }
+  .tabela-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--linha);
+  }
   .tabela-precos {
     display: flex;
     flex-direction: column;
@@ -337,6 +346,7 @@
     color: #ADA99C;
   }
   .etiqueta-preco.nao-encontrado .preco { color: var(--laser); font-size: 19px; font-family: var(--texto); font-weight: 600; }
+  .etiqueta-preco.nao-encontrado .codigo-produto { font-size: 17px; font-weight: 600; color: var(--laser); font-family: var(--texto); }
 
   footer {
     margin-top: auto;
@@ -391,7 +401,22 @@
   <div class="etiqueta-preco" id="etiqueta">
     <p class="rotulo" id="etiqueta-rotulo">Produto</p>
     <span class="badge-saldo" id="badge-saldo">SALDO</span>
-    <p class="nome-produto" id="etiqueta-nome">—</p>
+    <p class="codigo-produto" id="etiqueta-codigo-produto">—</p>
+
+    <div class="tabela-info" id="tabela-info">
+      <div class="linha-info">
+        <span class="rotulo-info">Código Cor</span>
+        <span class="valor-info" id="etiqueta-codigo-cor">—</span>
+      </div>
+      <div class="linha-info">
+        <span class="rotulo-info">Tamanho</span>
+        <span class="valor-info" id="etiqueta-tamanho">—</span>
+      </div>
+      <div class="linha-info">
+        <span class="rotulo-info">Descrição</span>
+        <span class="valor-info" id="etiqueta-descricao">—</span>
+      </div>
+    </div>
 
     <div class="tabela-precos" id="tabela-precos">
       <div class="linha-info">
@@ -429,7 +454,11 @@
   const estadoInicial = document.getElementById('estado-inicial');
   const etiqueta = document.getElementById('etiqueta');
   const elRotulo = document.getElementById('etiqueta-rotulo');
-  const elNome = document.getElementById('etiqueta-nome');
+  const elCodigoProduto = document.getElementById('etiqueta-codigo-produto');
+  const elCodigoCor = document.getElementById('etiqueta-codigo-cor');
+  const elTamanho = document.getElementById('etiqueta-tamanho');
+  const elDescricao = document.getElementById('etiqueta-descricao');
+  const tabelaInfo = document.getElementById('tabela-info');
   const elPrecoOriginal = document.getElementById('etiqueta-preco-original');
   const elDesconto = document.getElementById('etiqueta-desconto');
   const elPreco = document.getElementById('etiqueta-preco');
@@ -488,15 +517,19 @@
       linhas.slice(1).forEach((linha) => { // pula a linha 1 (cabecalho)
         const codigo = linha[0];                    // Coluna A
         const descricao = linha[1];                 // Coluna B
+        const codigoProduto = linha[2];              // Coluna C
+        const codigoCor = linha[3];                  // Coluna D
         const tamanho = linha[4];                    // Coluna E
         const precoOriginal = parseNumeroPreco(linha[5]);  // Coluna F
         const desconto = parseNumeroDesconto(linha[6]);    // Coluna G
         const precoFinal = parseNumeroPreco(linha[7]);      // Coluna H
 
         if (codigo && descricao && !isNaN(precoFinal)) {
-          const nome = tamanho ? `${String(descricao).trim()} — Tam. ${String(tamanho).trim()}` : String(descricao).trim();
           catalogo[String(codigo).trim()] = {
-            nome,
+            descricao: String(descricao).trim(),
+            codigoProduto: codigoProduto ? String(codigoProduto).trim() : '—',
+            codigoCor: codigoCor ? String(codigoCor).trim() : '—',
+            tamanho: tamanho ? String(tamanho).trim() : '—',
             precoOriginal: isNaN(precoOriginal) ? precoFinal : precoOriginal,
             desconto,
             precoFinal,
@@ -627,8 +660,12 @@
 
     if (produto) {
       elRotulo.textContent = `Produto encontrado — ${nomeLoja(lojaAtual)}`;
-      elNome.textContent = produto.nome;
+      elCodigoProduto.textContent = produto.codigoProduto;
+      elCodigoCor.textContent = produto.codigoCor;
+      elTamanho.textContent = produto.tamanho;
+      elDescricao.textContent = produto.descricao;
       elCodigo.textContent = codigo;
+      tabelaInfo.style.display = 'flex';
       tabelaPrecos.style.display = 'flex';
 
       const temDesconto = produto.desconto > 0 && produto.precoOriginal > produto.precoFinal;
@@ -639,9 +676,10 @@
       elPreco.textContent = produto.precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     } else {
       etiqueta.classList.add('nao-encontrado');
+      tabelaInfo.style.display = 'none';
       tabelaPrecos.style.display = 'none';
       elRotulo.textContent = 'Não cadastrado';
-      elNome.textContent = `Este código não foi encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
+      elCodigoProduto.textContent = `Código ${codigo} não encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
       elPreco.textContent = '';
       elCodigo.textContent = codigo;
     }
