@@ -97,6 +97,44 @@
     line-height: 1.15;
   }
 
+  /* Seletor de loja */
+  .seletor-loja {
+    width: 100%;
+    max-width: 440px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .botao-loja {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 10px;
+    border-radius: 12px;
+    border: 2px solid var(--linha);
+    background: var(--cartao);
+    cursor: pointer;
+    box-shadow: var(--sombra-1);
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .botao-loja:active { transform: scale(0.98); }
+  .botao-loja.selecionada { border-color: var(--tinta); }
+  .botao-loja img {
+    height: 22px;
+    max-width: 100%;
+    object-fit: contain;
+  }
+  .botao-loja .rotulo-loja {
+    font-family: var(--texto);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--tinta-suave);
+  }
+  .botao-loja.selecionada .rotulo-loja { color: var(--tinta); }
+
   /* Faixa de status do catálogo */
   .status-catalogo {
     width: 100%;
@@ -279,7 +317,18 @@
     </div>
   </header>
 
-  <div class="status-catalogo carregando" id="status-catalogo">Carregando catálogo de produtos...</div>
+  <div class="seletor-loja">
+    <div class="botao-loja" id="botao-calzedonia" data-loja="calzedonia">
+      <img src="assets/logo-calzedonia-botao.png" alt="Calzedonia" />
+      <span class="rotulo-loja">Calzedonia</span>
+    </div>
+    <div class="botao-loja" id="botao-intimissimi" data-loja="intimissimi">
+      <img src="assets/logo-intimissimi-botao.png" alt="Intimissimi" />
+      <span class="rotulo-loja">Intimissimi</span>
+    </div>
+  </div>
+
+  <div class="status-catalogo carregando" id="status-catalogo">Selecione a loja para carregar o catálogo.</div>
 
   <div class="visor" id="visor">
     <div id="leitor"></div>
@@ -307,7 +356,11 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-  const PLANILHA_URL = 'produtos.xlsx';
+  // Um arquivo de planilha para cada loja, na raiz do repositório.
+  const PLANILHAS = {
+    calzedonia: 'calzedonia.xlsx',
+    intimissimi: 'intimissimi.xlsx',
+  };
 
   const statusCatalogo = document.getElementById('status-catalogo');
   const botao = document.getElementById('botao-escanear');
@@ -318,66 +371,91 @@
   const elNome = document.getElementById('etiqueta-nome');
   const elPreco = document.getElementById('etiqueta-preco');
   const elCodigo = document.getElementById('etiqueta-codigo');
+  const botoesLoja = document.querySelectorAll('.botao-loja');
 
-  let catalogo = {};
+  const catalogosCarregados = {}; // cache por loja, pra nao baixar de novo ao trocar
+  let lojaAtual = null;
   let leitor = null;
   let escaneando = false;
 
-  function pegarValor(linha, opcoes) {
-    for (const chave of Object.keys(linha)) {
-      const chaveNormalizada = chave.toString().trim().toLowerCase();
-      if (opcoes.includes(chaveNormalizada)) return linha[chave];
+  function parseNumeroPreco(valor) {
+    if (typeof valor === 'number') return valor;
+    if (typeof valor === 'string') {
+      const limpo = valor.replace(/[^\d,.-]/g, '').replace(',', '.');
+      return parseFloat(limpo);
     }
-    return undefined;
+    return NaN;
   }
 
-  async function carregarCatalogo() {
+  async function carregarCatalogo(loja) {
+    if (catalogosCarregados[loja]) {
+      ativarLoja(loja);
+      return;
+    }
+
     statusCatalogo.className = 'status-catalogo carregando';
-    statusCatalogo.textContent = 'Carregando catálogo de produtos...';
+    statusCatalogo.textContent = `Carregando catálogo da ${nomeLoja(loja)}...`;
     botao.disabled = true;
     botao.textContent = 'Carregando catálogo...';
 
     try {
-      const resposta = await fetch(PLANILHA_URL, { cache: 'no-store' });
+      const resposta = await fetch(PLANILHAS[loja], { cache: 'no-store' });
       if (!resposta.ok) throw new Error('Arquivo de produtos não encontrado.');
 
       const buffer = await resposta.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const primeiraAba = workbook.SheetNames[0];
-      const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[primeiraAba], { defval: '' });
+      // le pela POSICAO da coluna (A, B, F), nao pelo nome do cabecalho,
+      // pra funcionar mesmo se o texto do cabecalho mudar um pouco
+      const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[primeiraAba], { header: 1, defval: '' });
 
-      const novoCatalogo = {};
+      const catalogo = {};
       let validos = 0;
 
-      linhas.forEach((linha) => {
-        const codigo = pegarValor(linha, ['codigo_barras', 'código_barras', 'codigo de barras', 'código de barras', 'codigo', 'código', 'ean', 'barcode']);
-        const nome = pegarValor(linha, ['nome', 'produto', 'descricao', 'descrição']);
-        let preco = pegarValor(linha, ['preco', 'preço', 'valor', 'price']);
+      linhas.slice(1).forEach((linha) => { // pula a linha 1 (cabecalho)
+        const codigo = linha[0];           // Coluna A
+        const descricao = linha[1];        // Coluna B
+        const tamanho = linha[4];          // Coluna E
+        const preco = parseNumeroPreco(linha[5]); // Coluna F
 
-        if (typeof preco === 'string') {
-          preco = preco.replace(/[^\d,.-]/g, '').replace(',', '.');
-        }
-        preco = parseFloat(preco);
-
-        if (codigo && nome && !isNaN(preco)) {
-          novoCatalogo[String(codigo).trim()] = { nome: String(nome).trim(), preco };
+        if (codigo && descricao && !isNaN(preco)) {
+          const nome = tamanho ? `${String(descricao).trim()} — Tam. ${String(tamanho).trim()}` : String(descricao).trim();
+          catalogo[String(codigo).trim()] = { nome, preco };
           validos++;
         }
       });
 
-      catalogo = novoCatalogo;
+      catalogosCarregados[loja] = catalogo;
       statusCatalogo.className = 'status-catalogo pronto';
-      statusCatalogo.textContent = `Catálogo carregado — ${validos} produtos.`;
-      botao.disabled = false;
-      botao.innerHTML = 'Escanear produto';
+      statusCatalogo.textContent = `${nomeLoja(loja)} — catálogo carregado (${validos} produtos).`;
+      ativarLoja(loja);
     } catch (err) {
       statusCatalogo.className = 'status-catalogo erro';
-      statusCatalogo.textContent = 'Não foi possível carregar o catálogo de produtos.';
+      statusCatalogo.textContent = `Não foi possível carregar o catálogo da ${nomeLoja(loja)}.`;
       botao.disabled = true;
       botao.textContent = 'Catálogo indisponível';
       console.error(err);
     }
   }
+
+  function ativarLoja(loja) {
+    lojaAtual = loja;
+    botoesLoja.forEach((el) => el.classList.toggle('selecionada', el.dataset.loja === loja));
+    botao.disabled = false;
+    botao.textContent = 'Escanear produto';
+    etiqueta.classList.remove('visivel');
+  }
+
+  function nomeLoja(loja) {
+    return loja === 'calzedonia' ? 'Calzedonia' : 'Intimissimi';
+  }
+
+  botoesLoja.forEach((el) => {
+    el.addEventListener('click', () => {
+      if (escaneando) pararLeitura();
+      carregarCatalogo(el.dataset.loja);
+    });
+  });
 
   async function iniciarLeitura() {
     leitor = new Html5Qrcode("leitor");
@@ -424,6 +502,7 @@
   }
 
   botao.addEventListener('click', () => {
+    if (!lojaAtual) return;
     if (escaneando) {
       pararLeitura();
     } else {
@@ -438,25 +517,24 @@
   }
 
   function buscarProduto(codigo) {
+    const catalogo = catalogosCarregados[lojaAtual] || {};
     const produto = catalogo[String(codigo).trim()];
     etiqueta.classList.remove('nao-encontrado');
     etiqueta.classList.add('visivel');
 
     if (produto) {
-      elRotulo.textContent = 'Produto encontrado';
+      elRotulo.textContent = `Produto encontrado — ${nomeLoja(lojaAtual)}`;
       elNome.textContent = produto.nome;
       elPreco.textContent = produto.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       elCodigo.textContent = codigo;
     } else {
       etiqueta.classList.add('nao-encontrado');
       elRotulo.textContent = 'Não cadastrado';
-      elNome.textContent = 'Este código não foi encontrado no catálogo.';
+      elNome.textContent = `Este código não foi encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
       elPreco.textContent = '';
       elCodigo.textContent = codigo;
     }
   }
-
-  carregarCatalogo();
 </script>
 </body>
 </html>
