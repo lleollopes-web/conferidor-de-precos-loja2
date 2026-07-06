@@ -255,6 +255,20 @@
     margin: 0 0 10px;
     line-height: 1.3;
   }
+  .badge-saldo {
+    display: none;
+    background: var(--laser);
+    color: #fff;
+    font-family: var(--texto);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  #etiqueta.tem-desconto .badge-saldo { display: inline-block; }
+  #etiqueta.tem-desconto .nome-produto { color: var(--laser); }
   .tabela-precos {
     display: flex;
     flex-direction: column;
@@ -284,6 +298,8 @@
   }
   #etiqueta.tem-desconto .valor-info#etiqueta-desconto {
     color: var(--laser);
+    font-size: 16px;
+    font-weight: 700;
   }
   .rotulo-final {
     font-family: var(--texto);
@@ -366,6 +382,7 @@
 
   <div class="etiqueta-preco" id="etiqueta">
     <p class="rotulo" id="etiqueta-rotulo">Produto</p>
+    <span class="badge-saldo" id="badge-saldo">SALDO</span>
     <p class="nome-produto" id="etiqueta-nome">—</p>
 
     <div class="tabela-precos" id="tabela-precos">
