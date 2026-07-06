@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin · Conferidor de Preços</title>
+<style>
+  :root {
+    --papel: #F7F5F0;
+    --tinta: #1C1C1C;
+    --linha: #D8D3C7;
+    --acento: #C6402B;
+    --sucesso: #2E6B4F;
+    --mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --texto: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--texto);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+  }
+  .marca-dagua {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .marca-dagua > div {
+    flex: 1 1 50%;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 55% auto;
+    opacity: 0.08;
+  }
+  .cartao {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 480px;
+    background: #fff;
+    border: 1px solid var(--linha);
+    border-radius: 4px;
+    padding: 32px;
+  }
+  h1 {
+    font-size: 20px;
+    letter-spacing: 0.02em;
+    margin: 0 0 4px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--acento);
+    margin: 0 0 8px;
+  }
+  p.sub {
+    color: #6b6b6b;
+    font-size: 14px;
+    margin: 0 0 28px;
+    line-height: 1.5;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    margin-top: 20px;
+  }
+  input[type="password"], input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--linha);
+    border-radius: 4px;
+    font-size: 15px;
+    font-family: var(--texto);
+    background: var(--papel);
+  }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 14px;
+    background: var(--tinta);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:hover:not(:disabled) { background: #000; }
+  #resultado {
+    margin-top: 20px;
+    padding: 14px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    display: none;
+    white-space: pre-wrap;
+  }
+  #resultado.ok { display: block; background: #EAF3EE; color: var(--sucesso); border: 1px solid #BFDCC9; }
+  #resultado.erro { display: block; background: #FBEAE7; color: var(--acento); border: 1px solid #F0C4BB; }
+  .dica {
+    margin-top: 28px;
+    font-size: 12px;
+    color: #8a8a8a;
+    border-top: 1px dashed var(--linha);
+    padding-top: 16px;
+    line-height: 1.6;
+  }
+  .dica code { background: var(--papel); padding: 1px 5px; border-radius: 3px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+  <div class="marca-dagua" aria-hidden="true">
+    <div style="background-image:url('ativos/logo-calzedonia-marca-dagua.png')"></div>
+    <div style="background-image:url('ativos/logo-intimissimi-marca-dagua.png')"></div>
+  </div>
+  <div class="cartao">
+    <p class="eyebrow">Painel do Administrador</p>
+    <h1>Atualizar catálogo de produtos</h1>
+    <p class="sub">Envie a planilha mais recente (.xlsx ou .csv) para substituir os preços cadastrados.</p>
+
+    <form id="form-importar">
+      <label for="token">Senha de administrador</label>
+      <input type="password" id="token" placeholder="Digite a senha" required />
+
+      <label for="arquivo">Planilha de produtos</label>
+      <input type="file" id="arquivo" accept=".xlsx,.xls,.csv" required />
+
+      <button type="submit" id="botao-enviar">Importar planilha</button>
+    </form>
+
+    <div id="resultado"></div>
+
+    <div class="dica">
+      A planilha deve ter as colunas <code>codigo_barras</code>, <code>nome</code> e <code>preco</code>
+      (a primeira linha deve ter esses nomes de cabeçalho). Ao importar, os produtos atuais são
+      substituídos pelos da nova planilha.
+    </div>
+  </div>
+
+<script>
+  const form = document.getElementById('form-importar');
+  const botao = document.getElementById('botao-enviar');
+  const resultado = document.getElementById('resultado');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const token = document.getElementById('token').value;
+    const arquivo = document.getElementById('arquivo').files[0];
+
+    resultado.className = '';
+    resultado.style.display = 'none';
+    botao.disabled = true;
+    botao.textContent = 'Importando...';
+
+    const dados = new FormData();
+    dados.append('planilha', arquivo);
+
+    try {
+      const resposta = await fetch('/api/importar', {
+        method: 'POST',
+        headers: { 'x-admin-token': token },
+        body: dados,
+      });
+      const json = await resposta.json();
+
+      if (resposta.ok && json.ok) {
+        resultado.className = 'ok';
+        let texto = json.mensagem;
+        if (json.linhas_com_erro && json.linhas_com_erro.length) {
+          texto += '\n\nAvisos:\n' + json.linhas_com_erro.join('\n');
+        }
+        resultado.textContent = texto;
+      } else {
+        resultado.className = 'erro';
+        resultado.textContent = json.mensagem || 'Não foi possível importar a planilha.';
+      }
+    } catch (err) {
+      resultado.className = 'erro';
+      resultado.textContent = 'Erro de conexão com o servidor.';
+    } finally {
+      resultado.style.display = 'block';
+      botao.disabled = false;
+      botao.textContent = 'Importar planilha';
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Conferidor de Preços</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --papel: #F6F4EE;
+    --cartao: #FFFFFF;
+    --tinta: #16191C;
+    --tinta-suave: #5C6268;
+    --linha: #E1DDD2;
+    --laser: #E13A2B;
+    --sucesso: #1E7A54;
+    --sombra-1: 0 1px 2px rgba(20, 20, 15, 0.04);
+    --sombra-2: 0 10px 30px rgba(20, 20, 15, 0.06);
+    --raio: 14px;
+    --display: 'Space Grotesk', system-ui, sans-serif;
+    --texto: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--texto);
+    overflow-x: hidden;
+  }
+
+  /* Marca d'água: metade da tela para cada logo */
+  .marca-dagua {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .marca-dagua > div {
+    flex: 1 1 50%;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 52% auto;
+    opacity: 0.07;
+  }
+
+  .tela {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 48px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 440px;
+    text-align: left;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .marca-icone {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--tinta);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .marca-icone svg { width: 24px; height: 24px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--laser);
+    margin: 0 0 4px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 26px;
+    margin: 0;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+
+  /* Faixa de status do catálogo */
+  .status-catalogo {
+    width: 100%;
+    max-width: 440px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--sombra-1);
+  }
+  .status-catalogo.carregando { background: #EFEBDF; color: var(--tinta-suave); }
+  .status-catalogo.pronto { background: #E5F2EA; color: var(--sucesso); }
+  .status-catalogo.erro { background: #FBEAE7; color: var(--laser); }
+
+  /* Área da câmera / viewfinder */
+  .visor {
+    width: 100%;
+    max-width: 440px;
+    aspect-ratio: 3 / 4;
+    background: #101214;
+    border-radius: var(--raio);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--sombra-2);
+  }
+  #leitor { width: 100%; height: 100%; }
+  #leitor video { object-fit: cover; }
+
+  .moldura {
+    position: absolute;
+    inset: 16%;
+    border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 12px;
+    pointer-events: none;
+    display: none;
+  }
+  .visor.ativo .moldura { display: block; }
+  .visor.ativo .laser-linha {
+    display: block;
+    position: absolute;
+    left: 16%;
+    right: 16%;
+    top: 16%;
+    height: 2px;
+    background: var(--laser);
+    box-shadow: 0 0 10px var(--laser);
+    animation: varrer 1.6s ease-in-out infinite;
+  }
+  .laser-linha { display: none; }
+  @keyframes varrer {
+    0%   { top: 16%; }
+    50%  { top: 80%; }
+    100% { top: 16%; }
+  }
+
+  .estado-inicial {
+    color: rgba(255,255,255,0.5);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: center;
+    padding: 0 30px;
+    line-height: 1.6;
+  }
+
+  /* Botão principal */
+  .botao-principal {
+    width: 100%;
+    max-width: 440px;
+    margin-top: 20px;
+    padding: 17px;
+    border: none;
+    border-radius: 12px;
+    background: var(--tinta);
+    color: #fff;
+    font-family: var(--texto);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: var(--sombra-1);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .botao-principal svg { width: 19px; height: 19px; }
+  .botao-principal:disabled { background: #C7C3B8; cursor: not-allowed; }
+  .botao-principal:active:not(:disabled) { transform: scale(0.98); }
+  .botao-principal.parar { background: var(--laser); }
+
+  /* Etiqueta de resultado */
+  .etiqueta-preco {
+    width: 100%;
+    max-width: 440px;
+    margin-top: 22px;
+    background: var(--cartao);
+    border-radius: var(--raio);
+    padding: 26px 26px;
+    box-shadow: var(--sombra-2);
+    transform: translateY(14px);
+    opacity: 0;
+    transition: transform 0.34s cubic-bezier(.2,.8,.3,1.2), opacity 0.34s ease;
+  }
+  .etiqueta-preco.visivel { transform: translateY(0); opacity: 1; }
+
+  .etiqueta-preco .rotulo {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9A968A;
+    margin: 0 0 8px;
+  }
+  .etiqueta-preco .nome-produto {
+    font-family: var(--display);
+    font-size: 21px;
+    font-weight: 600;
+    margin: 0 0 18px;
+    line-height: 1.3;
+  }
+  .etiqueta-preco .linha-preco {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-top: 1px dashed var(--linha);
+    padding-top: 18px;
+  }
+  .etiqueta-preco .preco {
+    font-family: var(--mono);
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--sucesso);
+    letter-spacing: -0.01em;
+  }
+  .etiqueta-preco .codigo {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #ADA99C;
+  }
+  .etiqueta-preco.nao-encontrado .preco { color: var(--laser); font-size: 19px; font-family: var(--texto); font-weight: 600; }
+
+  footer {
+    margin-top: auto;
+    padding-top: 34px;
+    font-family: var(--texto);
+    font-size: 12px;
+    color: #9A968A;
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="marca-dagua" aria-hidden="true">
+  <div style="background-image:url('ativos/logo-calzedonia-marca-dagua.png')"></div>
+  <div style="background-image:url('ativos/logo-intimissimi-marca-dagua.png')"></div>
+</div>
+<div class="tela">
+  <header>
+    <div class="marca-icone">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 5v14M7 5v14M10 5v14M15 5v14M17 5v14M21 5v14" stroke="#F6F4EE" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <p class="eyebrow">Conferidor de Preços</p>
+      <h1>Escaneie o código de barras</h1>
+    </div>
+  </header>
+
+  <div class="status-catalogo carregando" id="status-catalogo">Carregando catálogo de produtos...</div>
+
+  <div class="visor" id="visor">
+    <div id="leitor"></div>
+    <div class="moldura"></div>
+    <div class="laser-linha"></div>
+    <div class="estado-inicial" id="estado-inicial">
+      Toque em "Escanear produto"<br />para ligar a câmera
+    </div>
+  </div>
+
+  <button class="botao-principal" id="botao-escanear" disabled>Carregando catálogo...</button>
+
+  <div class="etiqueta-preco" id="etiqueta">
+    <p class="rotulo" id="etiqueta-rotulo">Produto</p>
+    <p class="nome-produto" id="etiqueta-nome">—</p>
+    <div class="linha-preco">
+      <span class="preco" id="etiqueta-preco">—</span>
+      <span class="codigo" id="etiqueta-codigo"></span>
+    </div>
+  </div>
+
+  <footer>Aponte a câmera diretamente para o código de barras, com boa iluminação.</footer>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+  const PLANILHA_URL = 'produtos.xlsx';
+
+  const statusCatalogo = document.getElementById('status-catalogo');
+  const botao = document.getElementById('botao-escanear');
+  const visor = document.getElementById('visor');
+  const estadoInicial = document.getElementById('estado-inicial');
+  const etiqueta = document.getElementById('etiqueta');
+  const elRotulo = document.getElementById('etiqueta-rotulo');
+  const elNome = document.getElementById('etiqueta-nome');
+  const elPreco = document.getElementById('etiqueta-preco');
+  const elCodigo = document.getElementById('etiqueta-codigo');
+
+  let catalogo = {};
+  let leitor = null;
+  let escaneando = false;
+
+  function pegarValor(linha, opcoes) {
+    for (const chave of Object.keys(linha)) {
+      const chaveNormalizada = chave.toString().trim().toLowerCase();
+      if (opcoes.includes(chaveNormalizada)) return linha[chave];
+    }
+    return undefined;
+  }
+
+  async function carregarCatalogo() {
+    statusCatalogo.className = 'status-catalogo carregando';
+    statusCatalogo.textContent = 'Carregando catálogo de produtos...';
+    botao.disabled = true;
+    botao.textContent = 'Carregando catálogo...';
+
+    try {
+      const resposta = await fetch(PLANILHA_URL, { cache: 'no-store' });
+      if (!resposta.ok) throw new Error('Arquivo de produtos não encontrado.');
+
+      const buffer = await resposta.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const primeiraAba = workbook.SheetNames[0];
+      const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[primeiraAba], { defval: '' });
+
+      const novoCatalogo = {};
+      let validos = 0;
+
+      linhas.forEach((linha) => {
+        const codigo = pegarValor(linha, ['codigo_barras', 'código_barras', 'codigo de barras', 'código de barras', 'codigo', 'código', 'ean', 'barcode']);
+        const nome = pegarValor(linha, ['nome', 'produto', 'descricao', 'descrição']);
+        let preco = pegarValor(linha, ['preco', 'preço', 'valor', 'price']);
+
+        if (typeof preco === 'string') {
+          preco = preco.replace(/[^\d,.-]/g, '').replace(',', '.');
+        }
+        preco = parseFloat(preco);
+
+        if (codigo && nome && !isNaN(preco)) {
+          novoCatalogo[String(codigo).trim()] = { nome: String(nome).trim(), preco };
+          validos++;
+        }
+      });
+
+      catalogo = novoCatalogo;
+      statusCatalogo.className = 'status-catalogo pronto';
+      statusCatalogo.textContent = `Catálogo carregado — ${validos} produtos.`;
+      botao.disabled = false;
+      botao.innerHTML = 'Escanear produto';
+    } catch (err) {
+      statusCatalogo.className = 'status-catalogo erro';
+      statusCatalogo.textContent = 'Não foi possível carregar o catálogo de produtos.';
+      botao.disabled = true;
+      botao.textContent = 'Catálogo indisponível';
+      console.error(err);
+    }
+  }
+
+  async function iniciarLeitura() {
+    leitor = new Html5Qrcode("leitor");
+    estadoInicial.style.display = 'none';
+    visor.classList.add('ativo');
+    botao.textContent = 'Parar câmera';
+    botao.classList.add('parar');
+    escaneando = true;
+
+    try {
+      await leitor.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: undefined,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+          ],
+        },
+        (codigoLido) => onCodigoLido(codigoLido),
+        () => { /* ignora frames sem leitura */ }
+      );
+    } catch (err) {
+      pararLeitura();
+      alert('Não foi possível acessar a câmera. Verifique se você deu permissão de câmera para o site.');
+      console.error(err);
+    }
+  }
+
+  async function pararLeitura() {
+    if (leitor && escaneando) {
+      try { await leitor.stop(); await leitor.clear(); } catch (e) {}
+    }
+    escaneando = false;
+    visor.classList.remove('ativo');
+    estadoInicial.style.display = 'block';
+    botao.textContent = 'Escanear produto';
+    botao.classList.remove('parar');
+  }
+
+  botao.addEventListener('click', () => {
+    if (escaneando) {
+      pararLeitura();
+    } else {
+      iniciarLeitura();
+    }
+  });
+
+  async function onCodigoLido(codigo) {
+    await pararLeitura();
+    if (navigator.vibrate) navigator.vibrate(80);
+    buscarProduto(codigo);
+  }
+
+  function buscarProduto(codigo) {
+    const produto = catalogo[String(codigo).trim()];
+    etiqueta.classList.remove('nao-encontrado');
+    etiqueta.classList.add('visivel');
+
+    if (produto) {
+      elRotulo.textContent = 'Produto encontrado';
+      elNome.textContent = produto.nome;
+      elPreco.textContent = produto.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      elCodigo.textContent = codigo;
+    } else {
+      etiqueta.classList.add('nao-encontrado');
+      elRotulo.textContent = 'Não cadastrado';
+      elNome.textContent = 'Este código não foi encontrado no catálogo.';
+      elPreco.textContent = '';
+      elCodigo.textContent = codigo;
+    }
+  }
+
+  carregarCatalogo();
+</script>
+</body>
+</html>
