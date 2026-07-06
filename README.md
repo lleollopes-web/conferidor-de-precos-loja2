@@ -1,0 +1,1 @@
+# conferidor-de-precos-loja2
