@@ -152,8 +152,16 @@
     justify-content: center;
     box-shadow: var(--sombra-2);
   }
-  #leitor { width: 100%; height: 100%; }
-  #leitor video { object-fit: cover; }
+  #leitor { width: 100%; height: 100%; position: relative; }
+  #leitor video, #leitor canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+  }
+  #leitor canvas.drawingBuffer { display: none; }
 
   .moldura {
     position: absolute;
@@ -406,7 +414,7 @@
   <footer>Aponte a câmera diretamente para o código de barras, com boa iluminação.</footer>
 </div>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
   // Um arquivo de planilha para cada loja, na raiz do repositório.
@@ -431,7 +439,6 @@
 
   const catalogosCarregados = {}; // cache por loja, pra nao baixar de novo ao trocar
   let lojaAtual = null;
-  let leitor = null;
   let escaneando = false;
 
   function parseNumeroPreco(valor) {
@@ -530,8 +537,10 @@
     });
   });
 
-  async function iniciarLeitura() {
-    leitor = new Html5Qrcode("leitor");
+  let ultimoCodigoLido = null;
+  let ultimoTimestampLeitura = 0;
+
+  function iniciarLeitura() {
     estadoInicial.style.display = 'none';
     visor.classList.add('ativo');
     botao.textContent = 'Parar câmera';
@@ -539,45 +548,54 @@
     escaneando = true;
     etiqueta.classList.remove('visivel', 'nao-encontrado', 'tem-desconto');
 
-    try {
-      await leitor.start(
-        { facingMode: "environment" },
-        {
-          fps: 15,
-          // Restringe a area de leitura à mesma caixa mostrada na tela (a moldura).
-          // Processar uma area menor da imagem deixa a decodificacao mais rapida
-          // e mais precisa, o que ajuda bastante no Safari/iPhone.
-          qrbox: (larguraVisor, alturaVisor) => {
-            const tamanho = Math.floor(Math.min(larguraVisor, alturaVisor) * 0.75);
-            return { width: tamanho, height: Math.floor(tamanho * 0.55) };
-          },
-          aspectRatio: 1.0,
-          disableFlip: false,
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-          ],
-          experimentalFeatures: {
-            useBarCodeDetectorIfSupported: true,
-          },
+    Quagga.init({
+      inputStream: {
+        type: 'LiveStream',
+        target: document.querySelector('#leitor'),
+        constraints: {
+          facingMode: 'environment',
         },
-        (codigoLido) => onCodigoLido(codigoLido),
-        () => { /* ignora frames sem leitura */ }
-      );
-    } catch (err) {
-      pararLeitura();
-      alert('Não foi possível acessar a câmera. Verifique se você deu permissão de câmera para o site.\n\nDetalhe técnico: ' + (err && err.message ? err.message : err));
-      console.error(err);
-    }
+      },
+      locator: {
+        patchSize: 'medium',
+        halfSample: true,
+      },
+      numOfWorkers: 2,
+      frequency: 10,
+      decoder: {
+        readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader', 'code_128_reader', 'code_39_reader'],
+      },
+      locate: true,
+    }, (err) => {
+      if (err) {
+        console.error(err);
+        pararLeitura();
+        alert('Não foi possível acessar a câmera. Verifique se você deu permissão de câmera para o site.\n\nDetalhe técnico: ' + (err && err.message ? err.message : err));
+        return;
+      }
+      Quagga.start();
+    });
+
+    Quagga.onDetected(aoDetectarCodigo);
   }
 
-  async function pararLeitura() {
-    if (leitor && escaneando) {
-      try { await leitor.stop(); await leitor.clear(); } catch (e) {}
+  function aoDetectarCodigo(resultado) {
+    const codigo = resultado && resultado.codeResult && resultado.codeResult.code;
+    if (!codigo) return;
+    const agora = Date.now();
+    // evita disparar varias vezes seguidas pro mesmo codigo em menos de 2s
+    if (codigo === ultimoCodigoLido && (agora - ultimoTimestampLeitura) < 2000) return;
+    ultimoCodigoLido = codigo;
+    ultimoTimestampLeitura = agora;
+    onCodigoLido(codigo);
+  }
+
+  function pararLeitura() {
+    if (escaneando) {
+      try {
+        Quagga.offDetected(aoDetectarCodigo);
+        Quagga.stop();
+      } catch (e) { /* ignora se ja estava parado */ }
     }
     escaneando = false;
     visor.classList.remove('ativo');
@@ -595,8 +613,8 @@
     }
   });
 
-  async function onCodigoLido(codigo) {
-    await pararLeitura();
+  function onCodigoLido(codigo) {
+    pararLeitura();
     if (navigator.vibrate) navigator.vibrate(80);
     buscarProduto(codigo);
   }
