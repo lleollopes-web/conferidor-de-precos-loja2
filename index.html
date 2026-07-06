@@ -113,8 +113,8 @@
   }
   .botao-loja .rotulo-loja {
     font-family: var(--texto);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--tinta-suave);
   }
   .botao-loja.selecionada .rotulo-loja { color: var(--tinta); }
@@ -142,7 +142,7 @@
   .visor {
     width: 100%;
     max-width: 440px;
-    height: clamp(260px, 48vh, 460px);
+    height: clamp(200px, 32vh, 340px);
     background: #101214;
     border-radius: var(--raio);
     position: relative;
@@ -250,27 +250,41 @@
     margin: 0 0 10px;
     line-height: 1.3;
   }
-  .linha-desconto {
+  .tabela-precos {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 22px;
-    margin-bottom: 8px;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
   }
-  .preco-original {
-    font-family: var(--mono);
-    font-size: 15px;
-    color: #ADA99C;
-    text-decoration: line-through;
+  .linha-info {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
   }
-  .badge-desconto {
+  .rotulo-info {
     font-family: var(--texto);
-    font-size: 11px;
-    font-weight: 700;
-    color: #fff;
-    background: var(--laser);
-    padding: 3px 8px;
-    border-radius: 20px;
+    font-size: 13px;
+    color: var(--tinta-suave);
+  }
+  .valor-info {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--tinta);
+  }
+  #etiqueta.tem-desconto .valor-info#etiqueta-preco-original {
+    text-decoration: line-through;
+    color: #ADA99C;
+    font-weight: 500;
+  }
+  #etiqueta.tem-desconto .valor-info#etiqueta-desconto {
+    color: var(--laser);
+  }
+  .rotulo-final {
+    font-family: var(--texto);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tinta-suave);
   }
   .etiqueta-preco .linha-preco {
     display: flex;
@@ -287,6 +301,8 @@
     letter-spacing: -0.01em;
   }
   .etiqueta-preco .codigo {
+    display: block;
+    margin-top: 10px;
     font-family: var(--mono);
     font-size: 12px;
     color: #ADA99C;
@@ -346,14 +362,23 @@
   <div class="etiqueta-preco" id="etiqueta">
     <p class="rotulo" id="etiqueta-rotulo">Produto</p>
     <p class="nome-produto" id="etiqueta-nome">—</p>
-    <div class="linha-desconto" id="linha-desconto" style="display:none;">
-      <span class="preco-original" id="etiqueta-preco-original"></span>
-      <span class="badge-desconto" id="etiqueta-desconto"></span>
+
+    <div class="tabela-precos" id="tabela-precos">
+      <div class="linha-info">
+        <span class="rotulo-info">Preço original</span>
+        <span class="valor-info" id="etiqueta-preco-original">—</span>
+      </div>
+      <div class="linha-info">
+        <span class="rotulo-info">Desconto</span>
+        <span class="valor-info" id="etiqueta-desconto">—</span>
+      </div>
     </div>
+
     <div class="linha-preco">
+      <span class="rotulo-final">Preço final</span>
       <span class="preco" id="etiqueta-preco">—</span>
-      <span class="codigo" id="etiqueta-codigo"></span>
     </div>
+    <span class="codigo" id="etiqueta-codigo"></span>
   </div>
 
   <footer>Aponte a câmera diretamente para o código de barras, com boa iluminação.</footer>
@@ -375,11 +400,11 @@
   const etiqueta = document.getElementById('etiqueta');
   const elRotulo = document.getElementById('etiqueta-rotulo');
   const elNome = document.getElementById('etiqueta-nome');
-  const linhaDesconto = document.getElementById('linha-desconto');
   const elPrecoOriginal = document.getElementById('etiqueta-preco-original');
   const elDesconto = document.getElementById('etiqueta-desconto');
   const elPreco = document.getElementById('etiqueta-preco');
   const elCodigo = document.getElementById('etiqueta-codigo');
+  const tabelaPrecos = document.getElementById('tabela-precos');
   const botoesLoja = document.querySelectorAll('.botao-loja');
 
   const catalogosCarregados = {}; // cache por loja, pra nao baixar de novo ao trocar
@@ -545,26 +570,24 @@
   function buscarProduto(codigo) {
     const catalogo = catalogosCarregados[lojaAtual] || {};
     const produto = catalogo[String(codigo).trim()];
-    etiqueta.classList.remove('nao-encontrado');
+    etiqueta.classList.remove('nao-encontrado', 'tem-desconto');
     etiqueta.classList.add('visivel');
 
     if (produto) {
       elRotulo.textContent = `Produto encontrado — ${nomeLoja(lojaAtual)}`;
       elNome.textContent = produto.nome;
       elCodigo.textContent = codigo;
+      tabelaPrecos.style.display = 'flex';
 
       const temDesconto = produto.desconto > 0 && produto.precoOriginal > produto.precoFinal;
-      if (temDesconto) {
-        linhaDesconto.style.display = 'flex';
-        elPrecoOriginal.textContent = produto.precoOriginal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        elDesconto.textContent = `-${produto.desconto.toLocaleString('pt-BR')}%`;
-      } else {
-        linhaDesconto.style.display = 'none';
-      }
+      if (temDesconto) etiqueta.classList.add('tem-desconto');
+
+      elPrecoOriginal.textContent = produto.precoOriginal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      elDesconto.textContent = produto.desconto > 0 ? `-${produto.desconto.toLocaleString('pt-BR')}%` : 'Sem desconto';
       elPreco.textContent = produto.precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     } else {
       etiqueta.classList.add('nao-encontrado');
-      linhaDesconto.style.display = 'none';
+      tabelaPrecos.style.display = 'none';
       elRotulo.textContent = 'Não cadastrado';
       elNome.textContent = `Este código não foi encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
       elPreco.textContent = '';
