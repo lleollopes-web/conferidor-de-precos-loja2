@@ -231,6 +231,41 @@
   .botao-principal:active:not(:disabled) { transform: scale(0.98); }
   .botao-principal.parar { background: var(--laser); }
 
+  /* Busca manual do codigo de barras */
+  .busca-manual {
+    width: 100%;
+    max-width: 440px;
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+  }
+  .busca-manual input {
+    flex: 1;
+    min-width: 0;
+    padding: 13px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--linha);
+    background: var(--cartao);
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--tinta);
+  }
+  .busca-manual input:focus { outline: none; border-color: var(--tinta); }
+  .busca-manual input:disabled { background: #EFEBDF; color: #ADA99C; }
+  .busca-manual button {
+    flex-shrink: 0;
+    padding: 13px 18px;
+    border: none;
+    border-radius: 10px;
+    background: var(--tinta);
+    color: #fff;
+    font-family: var(--texto);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .busca-manual button:disabled { background: #C7C3B8; cursor: not-allowed; }
+
   /* Etiqueta de resultado */
   .etiqueta-preco {
     width: 100%;
@@ -256,13 +291,12 @@
     color: #9A968A;
     margin: 0 0 8px;
   }
-  .etiqueta-preco .codigo-produto {
+  .etiqueta-preco .nome-produto {
     font-family: var(--display);
-    font-size: 28px;
-    font-weight: 700;
-    margin: 0 0 14px;
-    line-height: 1.2;
-    letter-spacing: -0.01em;
+    font-size: 21px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    line-height: 1.3;
   }
   .badge-saldo {
     display: none;
@@ -277,15 +311,7 @@
     margin-bottom: 8px;
   }
   #etiqueta.tem-desconto .badge-saldo { display: inline-block; }
-  #etiqueta.tem-desconto .codigo-produto { color: var(--laser); }
-  .tabela-info {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px dashed var(--linha);
-  }
+  #etiqueta.tem-desconto .nome-produto { color: var(--laser); }
   .tabela-precos {
     display: flex;
     flex-direction: column;
@@ -346,7 +372,6 @@
     color: #ADA99C;
   }
   .etiqueta-preco.nao-encontrado .preco { color: var(--laser); font-size: 19px; font-family: var(--texto); font-weight: 600; }
-  .etiqueta-preco.nao-encontrado .codigo-produto { font-size: 17px; font-weight: 600; color: var(--laser); font-family: var(--texto); }
 
   footer {
     margin-top: auto;
@@ -398,25 +423,15 @@
 
   <button class="botao-principal" id="botao-escanear" disabled>Carregando catálogo...</button>
 
+  <div class="busca-manual">
+    <input type="text" inputmode="numeric" id="input-codigo-manual" placeholder="Ou digite o código de barras" disabled />
+    <button id="botao-buscar-manual" disabled>Buscar</button>
+  </div>
+
   <div class="etiqueta-preco" id="etiqueta">
     <p class="rotulo" id="etiqueta-rotulo">Produto</p>
     <span class="badge-saldo" id="badge-saldo">SALDO</span>
-    <p class="codigo-produto" id="etiqueta-codigo-produto">—</p>
-
-    <div class="tabela-info" id="tabela-info">
-      <div class="linha-info">
-        <span class="rotulo-info">Código Cor</span>
-        <span class="valor-info" id="etiqueta-codigo-cor">—</span>
-      </div>
-      <div class="linha-info">
-        <span class="rotulo-info">Tamanho</span>
-        <span class="valor-info" id="etiqueta-tamanho">—</span>
-      </div>
-      <div class="linha-info">
-        <span class="rotulo-info">Descrição</span>
-        <span class="valor-info" id="etiqueta-descricao">—</span>
-      </div>
-    </div>
+    <p class="nome-produto" id="etiqueta-nome">—</p>
 
     <div class="tabela-precos" id="tabela-precos">
       <div class="linha-info">
@@ -454,17 +469,15 @@
   const estadoInicial = document.getElementById('estado-inicial');
   const etiqueta = document.getElementById('etiqueta');
   const elRotulo = document.getElementById('etiqueta-rotulo');
-  const elCodigoProduto = document.getElementById('etiqueta-codigo-produto');
-  const elCodigoCor = document.getElementById('etiqueta-codigo-cor');
-  const elTamanho = document.getElementById('etiqueta-tamanho');
-  const elDescricao = document.getElementById('etiqueta-descricao');
-  const tabelaInfo = document.getElementById('tabela-info');
+  const elNome = document.getElementById('etiqueta-nome');
   const elPrecoOriginal = document.getElementById('etiqueta-preco-original');
   const elDesconto = document.getElementById('etiqueta-desconto');
   const elPreco = document.getElementById('etiqueta-preco');
   const elCodigo = document.getElementById('etiqueta-codigo');
   const tabelaPrecos = document.getElementById('tabela-precos');
   const botoesLoja = document.querySelectorAll('.botao-loja');
+  const inputCodigoManual = document.getElementById('input-codigo-manual');
+  const botaoBuscarManual = document.getElementById('botao-buscar-manual');
 
   const catalogosCarregados = {}; // cache por loja, pra nao baixar de novo ao trocar
   let lojaAtual = null;
@@ -517,19 +530,15 @@
       linhas.slice(1).forEach((linha) => { // pula a linha 1 (cabecalho)
         const codigo = linha[0];                    // Coluna A
         const descricao = linha[1];                 // Coluna B
-        const codigoProduto = linha[2];              // Coluna C
-        const codigoCor = linha[3];                  // Coluna D
         const tamanho = linha[4];                    // Coluna E
         const precoOriginal = parseNumeroPreco(linha[5]);  // Coluna F
         const desconto = parseNumeroDesconto(linha[6]);    // Coluna G
         const precoFinal = parseNumeroPreco(linha[7]);      // Coluna H
 
         if (codigo && descricao && !isNaN(precoFinal)) {
+          const nome = tamanho ? `${String(descricao).trim()} — Tam. ${String(tamanho).trim()}` : String(descricao).trim();
           catalogo[String(codigo).trim()] = {
-            descricao: String(descricao).trim(),
-            codigoProduto: codigoProduto ? String(codigoProduto).trim() : '—',
-            codigoCor: codigoCor ? String(codigoCor).trim() : '—',
-            tamanho: tamanho ? String(tamanho).trim() : '—',
+            nome,
             precoOriginal: isNaN(precoOriginal) ? precoFinal : precoOriginal,
             desconto,
             precoFinal,
@@ -556,6 +565,8 @@
     botoesLoja.forEach((el) => el.classList.toggle('selecionada', el.dataset.loja === loja));
     botao.disabled = false;
     botao.textContent = 'Escanear produto';
+    inputCodigoManual.disabled = false;
+    botaoBuscarManual.disabled = false;
     etiqueta.classList.remove('visivel');
   }
 
@@ -652,6 +663,20 @@
     buscarProduto(codigo);
   }
 
+  function buscarPorDigitacao() {
+    const codigo = inputCodigoManual.value.trim();
+    if (!codigo || !lojaAtual) return;
+    if (escaneando) pararLeitura();
+    buscarProduto(codigo);
+    inputCodigoManual.value = '';
+    inputCodigoManual.blur();
+  }
+
+  botaoBuscarManual.addEventListener('click', buscarPorDigitacao);
+  inputCodigoManual.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') buscarPorDigitacao();
+  });
+
   function buscarProduto(codigo) {
     const catalogo = catalogosCarregados[lojaAtual] || {};
     const produto = catalogo[String(codigo).trim()];
@@ -660,12 +685,8 @@
 
     if (produto) {
       elRotulo.textContent = `Produto encontrado — ${nomeLoja(lojaAtual)}`;
-      elCodigoProduto.textContent = produto.codigoProduto;
-      elCodigoCor.textContent = produto.codigoCor;
-      elTamanho.textContent = produto.tamanho;
-      elDescricao.textContent = produto.descricao;
+      elNome.textContent = produto.nome;
       elCodigo.textContent = codigo;
-      tabelaInfo.style.display = 'flex';
       tabelaPrecos.style.display = 'flex';
 
       const temDesconto = produto.desconto > 0 && produto.precoOriginal > produto.precoFinal;
@@ -676,10 +697,9 @@
       elPreco.textContent = produto.precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     } else {
       etiqueta.classList.add('nao-encontrado');
-      tabelaInfo.style.display = 'none';
       tabelaPrecos.style.display = 'none';
       elRotulo.textContent = 'Não cadastrado';
-      elCodigoProduto.textContent = `Código ${codigo} não encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
+      elNome.textContent = `Este código não foi encontrado no catálogo da ${nomeLoja(lojaAtual)}.`;
       elPreco.textContent = '';
       elCodigo.textContent = codigo;
     }
